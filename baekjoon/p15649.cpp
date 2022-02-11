@@ -2,12 +2,12 @@
 
 using namespace std;
 
-void print_sequence(int N, int M) {
-
+int N, M;
+void dfs(int cnt) {
+  i
 }
 
 int main() {
-  int N, M;
   cin >> N >> M;
-  print_sequence(N, M);
+  dfs(0);
 }

@@ -7,6 +7,7 @@
 using namespace std;
 
 struct stack {
+
   int array[Stack_Size];
   // stack을 구현할 리스트 선언
   int last = -1;
@@ -46,14 +47,17 @@ struct stack {
 };
 
 int main(void) {
+
   stack s;
   // int형 element를 가지는 stack s를 선언
+
   s.push(1);
   // s에 1을 push
   s.push(2);
   // s에 1을 push
   s.push(3);
   // s에 1을 push
+
   cout << s.top() << endl;
   // s의 가장 마지막으로 저장된 데이터인 3이 출력
   s.pop();
@@ -64,11 +68,13 @@ int main(void) {
   // top 데이터인 2를 삭제
   cout << s.top() << endl;
   // 1이 출력
+  
   cout << "s is empty? : " << (s.empty() ? "yes!" : "no!") << endl;
   // s에 1이 남아있기에 s is empty? : no!
   s.pop();
   // top 데이터인 1을 삭제
   cout << "s is empty? : " << (s.empty() ? "yes!" : "no!") << endl;
   // s에 아무것도 없기에 s is empty? : yes
+
   return 0;
 }

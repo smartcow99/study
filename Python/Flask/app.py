@@ -8,11 +8,108 @@ response = ""
 app = Flask(__name__)
 app.config['JSON_AS_ASCII'] = False
 
-# @app.route('/')
-# def home() :
-#   return "hello flask!"
+@app.route('/')
+def home() :
+  return "hello flask!"
 
-@app.route('/', methods = ['GET', 'POST'])
+@app.route('/monthly', methods = ['GET', 'POST'])
+def monthlyRoute() :
+  
+  global response
+  
+  if(request.method == 'POST') :
+    request_data = request.data
+    request_data = json.loads(request_data.decode('utf-8'))
+    
+    def monthly():
+      import pandas as pd
+      pd.set_option('mode.chained_assignment', None)
+      
+      # 데이터 적재
+      borrowed_book = pd.read_csv('./데이터_단행본대출.csv', encoding='cp949', low_memory=False)
+      lib_book = pd.read_csv('./데이터_단행본도서.csv', encoding='cp949', low_memory=False)
+      
+      # 불필요한 테이블(열) 삭제
+      borrowed_book.drop(columns=['반납일시', '등록번호', '연대출권수'], inplace=True)
+      lib_book.drop(columns=['등록번호', '등록일자', '수서구분', 'BIBLIO_ID'], inplace=True)
+      renewed_book = borrowed_book[(borrowed_book['대출연장구분'] == '연장')].index
+      borrowed_book.drop(renewed_book, inplace=True)
+      
+      
+      # 단행본 대출 데이터 결측치 확인 및 제거
+      # print(borrowed_book.isnull().sum())
+      borrowed_book.dropna(subset=['ISBN'], inplace=True)
+      borrowed_book.dropna(subset=['상위소속'], inplace=True)
+      # print(borrowed_book.isnull().sum())
+      
+      
+      # 단행본 도서 데이터 결측치 확인 및 제거 => fillna()을 사용해 missing으로 채우기
+      # print(lib_book.isnull().sum())
+      lib_book.fillna('missing', inplace=True)
+      # print(lib_book.isnull().sum())
+      
+      # borrowed_book에 'rating' 열 추가 및 전부 1로 초기화
+      # rating 수치는 대출수이며, 뒤에 유클리디언 유사도에서 사용함
+      borrowed_book['rating'] = 1
+      borrowed_book.drop(columns=['대출연장구분', '입학년도', '소속', '상위소속'], inplace=True)
+      year = request_data["yearly"]
+      month = request_data["monthly"]
+      borrowed_book['대출일시'] = (borrowed_book.대출일시.str.split('/').str[0] == year) & (borrowed_book.대출일시.str.split('/').str[1] == month)
+      # print(borrowed_book.head())
+      false_year = borrowed_book[(borrowed_book['대출일시'] == False)].index
+      borrowed_book.drop(false_year, inplace=True)
+      
+      
+      # print(borrowed_book.head())
+      # print(borrowed_book.info())
+      
+      
+      from collections import Counter
+      
+      # rating 값을 같은 이름을 가진 책의 갯수를 세어서 대치함
+      for i in borrowed_book.index:
+          tmp = Counter(borrowed_book['서명'])[borrowed_book.loc[i,'서명']]
+          borrowed_book['rating'][i] = tmp
+      
+      # print("===========================")
+      # print("===========================")
+      # ISBN으로 중복 데이터를 drop 시킬려 했으나
+      # 다른 책인데 동일 ISBN을 갖고 있는 데이터가 있어서
+      # 서명으로 중복 데이터를 제거함
+      borrowed_book.drop_duplicates(['서명'], keep='first', inplace = True)
+      ranking_book = borrowed_book.sort_values(by=['rating'], ascending=False).head(10)
+      # print(borrowed_book.info())
+      ranking_book.reset_index(inplace=True)
+      ranking_book.drop(columns='index', inplace=True)
+      print(ranking_book.head(10))
+      info_book_df = pd.DataFrame()
+      
+      
+      # print("-----")
+      #print(ranking_book.loc[[0],['ISBN']])
+      for i in range(0,10):
+          con = lib_book.ISBN == ranking_book.loc[i].ISBN
+          info_book_df = pd.concat([info_book_df, lib_book[con].iloc[:1]])
+      
+      info_book_df.reset_index(inplace=True)
+      info_book_df.drop(columns='index', inplace=True)
+      # print(info_book_df.head(10))
+      
+      info_book_dict = info_book_df.to_dict('records')
+      print(info_book_dict)
+      return info_book_dict
+      
+    result = monthly()
+    
+    response = result
+    return jsonify(response)
+  else :
+    return jsonify(response)
+    
+  
+
+
+@app.route('/recommend', methods = ['GET', 'POST'])
 def userRoute() :
   
   global response
@@ -20,8 +117,7 @@ def userRoute() :
   if(request.method == 'POST') :
     request_data = request.data
     request_data = json.loads(request_data.decode('utf-8'))
-    # response = recommend(request_data['college'],request_data['major'],request_data['year'])
-    # return " "
+
     def recommend():
       import pandas as pd
       
@@ -90,11 +186,6 @@ def userRoute() :
       u_student_ID = borrowed_book['입학년도'] == student_ID
       u_borrowed_book = borrowed_book[u_college & u_department & u_student_ID]
 
-      # 새로 피봇팅된 Dataframe 정보 출력
-      # print(u_borrowed_book.head())
-      # print(u_borrowed_book.info())
-
-
       from collections import Counter
 
       # rating 값을 같은 이름을 가진 책의 갯수를 세어서 대치함
@@ -102,17 +193,8 @@ def userRoute() :
           tmp = Counter(u_borrowed_book['서명'])[u_borrowed_book.loc[i,'서명']]
           u_borrowed_book['rating'][i] = tmp
 
-      # ISBN으로 중복 데이터를 drop 시킬려 했으나
-      # 다른 책인데 동일 ISBN을 갖고 있는 데이터가 있어서
-      # 서명으로 중복 데이터를 제거함
       u_borrowed_book.drop_duplicates(['서명'], keep='first', inplace = True)
-      # print(u_borrowed_book.sort_values(by=['rating'], ascending=False).head())
-      # print(u_borrowed_book.info())
 
-      # 레이팅을 0과 1사이의 스케일링 처리
-      # (원래값 - min값) / (max - min) 값
-      # rating값이 int형이기 때문에 float형으로 변환 후 진행
-      # rating값의 편차가 크기 때문에 0과 1사이 값으로 스케일링 처리
       '''
       u_borrowed_book['rating'] = u_borrowed_book['rating'].astype('float')
       max = u_borrowed_book['rating'].max()
@@ -136,7 +218,6 @@ def userRoute() :
       '''
       book_user_rating = u_borrowed_book.pivot_table('rating', index = '입학년도', columns='서명')
       book_user_rating_T = book_user_rating.transpose()
-      # print(book_user_rating.head())
 
 
 
@@ -150,42 +231,29 @@ def userRoute() :
       '''
       euclidean_distances(book_user_rating_T, book_user_rating_T)
       euclidean_similarty = 1 / (euclidean_distances(book_user_rating_T, book_user_rating_T) +1e-5)
-      # print(euclidean_similarty)
       similarity_rate_df = pd.DataFrame(euclidean_similarty, index = book_user_rating.columns, columns= book_user_rating.columns)
-      # print(similarity_rate_df.head())
       recommand_book = similarity_rate_df[random_book['서명'].values[0]].sort_values(ascending=True)[:4]
 
       '''
       추천된 책을 단행본 도서.csv 파일과 연동하여
       도서 정보 출력
       '''
-      # print("======================")
-      # print(recommand_book.head(4))
-      # print("====")
       recommand_book_df = pd.Series.to_frame(self=recommand_book, name='rating')
       recommand_book_df_T = recommand_book_df.transpose()
-      # print(recommand_book_df_T.info())
-      # print(recommand_book_df_T.head())
-      # print(recommand_book_df_T.columns[0])
       info_book_df=pd.DataFrame()
       for i in range(0, 3):
           con = u_borrowed_book.서명 == recommand_book_df_T.columns[i]
           con_ISBN = lib_book.ISBN == u_borrowed_book[con].ISBN.values[0]
-          #print(lib_book[con_ISBN].iloc[:1])
           info_book_df = pd.concat([info_book_df, lib_book[con_ISBN].iloc[:1]])
 
-      # print("-----------")
       info_book_df.reset_index(inplace=True)
       info_book_df.drop(columns='index', inplace=True)
-      # print(info_book_df.info())
-      # print(info_book_df.head())
-      # print("=====")
-      info_book_dict = info_book_df.to_json(orient= 'columns')
+      info_book_dict = info_book_df.to_dict('records')
       print(info_book_dict)
 
       return info_book_dict
     result = recommend()
-    # result = json.dumps(result, ensure_ascii=False).encode('utf-8')
+    
     response = result
     return jsonify(response)
   else :
